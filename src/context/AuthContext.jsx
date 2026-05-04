@@ -39,7 +39,14 @@ export function AuthProvider({ children }) {
       redirectTo: window.location.origin,
     })
 
-  const signOut = () => supabase.auth.signOut()
+  const signOut = async () => {
+    try {
+      sessionStorage.removeItem('vcf_intro_shown')
+    } catch {
+      /* ignore */
+    }
+    return supabase.auth.signOut()
+  }
 
   const value = {
     user,

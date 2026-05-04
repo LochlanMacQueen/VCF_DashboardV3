@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { DataProvider, useData } from './context/DataContext'
 import Layout from './components/Layout'
+import IntroAnimation from './components/IntroAnimation'
 import Login from './pages/Login'
 import Loading from './pages/Loading'
 import NoAccount from './pages/NoAccount'
@@ -32,6 +34,31 @@ function AdminOnly({ children }) {
 
 function Authenticated() {
   const { loading: dataLoading, myAccount, accounts } = useData()
+  const [introDone, setIntroDone] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      sessionStorage.getItem('vcf_intro_shown') === '1'
+  )
+
+  // Hold the intro until BOTH the animation has run its full sequence AND
+  // the data is ready. The intro doubles as a premium loading state.
+  if (!introDone) {
+    const ready = !dataLoading && accounts.length > 0
+    return (
+      <IntroAnimation
+        ready={ready}
+        onComplete={() => {
+          try {
+            sessionStorage.setItem('vcf_intro_shown', '1')
+          } catch {
+            /* ignore privacy mode */
+          }
+          setIntroDone(true)
+        }}
+      />
+    )
+  }
+
   if (dataLoading && accounts.length === 0) return <Loading />
   if (!myAccount) return <NoAccount />
 

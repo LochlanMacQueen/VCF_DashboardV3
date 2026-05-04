@@ -41,15 +41,27 @@ export default function Overview() {
     if (h.marketValue > 0) acc[sector] = (acc[sector] || 0) + h.marketValue
     return acc
   }, {})
-  const sectorLabels = Object.keys(sectorTotals)
-  const sectorValues = Object.values(sectorTotals)
+  const sectorTotalValue = Object.values(sectorTotals).reduce(
+    (a, b) => a + b,
+    0
+  )
+  // Sort largest → smallest so the key reads naturally
+  const sectorEntries = Object.entries(sectorTotals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value], i) => ({
+      name,
+      value,
+      pct: sectorTotalValue > 0 ? value / sectorTotalValue : 0,
+      // map back to the original color index in SECTOR_PALETTE
+      color: SECTOR_PALETTE[i % SECTOR_PALETTE.length],
+    }))
 
   const sectorChartData = {
-    labels: sectorLabels,
+    labels: sectorEntries.map((s) => s.name),
     datasets: [
       {
-        data: sectorValues,
-        backgroundColor: SECTOR_PALETTE,
+        data: sectorEntries.map((s) => s.value),
+        backgroundColor: sectorEntries.map((s) => s.color),
         borderColor: '#fff',
         borderWidth: 2,
         hoverOffset: 8,
@@ -62,10 +74,7 @@ export default function Overview() {
     maintainAspectRatio: false,
     cutout: '62%',
     plugins: {
-      legend: {
-        position: 'bottom',
-        labels: { padding: 12, boxWidth: 8, boxHeight: 8 },
-      },
+      legend: { display: false }, // we render a richer key below
       tooltip: {
         callbacks: {
           label: (ctx) => {
@@ -262,15 +271,42 @@ export default function Overview() {
           <h2 className="text-base font-semibold text-slate-900 mb-4">
             Sector allocation
           </h2>
-          <div className="relative h-72">
-            {sectorLabels.length > 0 ? (
-              <Doughnut data={sectorChartData} options={sectorChartOptions} />
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400">
-                No sector data available
+          {sectorEntries.length > 0 ? (
+            <>
+              <div className="relative h-56">
+                <Doughnut data={sectorChartData} options={sectorChartOptions} />
               </div>
-            )}
-          </div>
+
+              {/* Sector key with %, sorted largest → smallest */}
+              <ul className="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
+                {sectorEntries.map((s) => (
+                  <li
+                    key={s.name}
+                    className="flex items-center gap-3 text-sm"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm"
+                      style={{ background: s.color }}
+                      aria-hidden
+                    />
+                    <span className="flex-1 truncate text-slate-700">
+                      {s.name}
+                    </span>
+                    <span className="text-xs tabular-nums text-slate-400">
+                      {formatCurrency(s.value)}
+                    </span>
+                    <span className="w-14 text-right tabular-nums font-semibold text-slate-900">
+                      {formatPercent(s.pct, 1)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <div className="h-72 flex items-center justify-center text-sm text-slate-400">
+              No sector data available
+            </div>
+          )}
         </Card>
       </div>
 
