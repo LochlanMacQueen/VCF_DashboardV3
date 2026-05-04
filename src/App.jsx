@@ -40,13 +40,11 @@ function Authenticated() {
       sessionStorage.getItem('vcf_intro_shown') === '1'
   )
 
-  // Hold the intro until BOTH the animation has run its full sequence AND
-  // the data is ready. The intro doubles as a premium loading state.
+  // Intro runs on its own ~3s clock. If data isn't ready by then, the
+  // regular <Loading /> fallback below covers the gap.
   if (!introDone) {
-    const ready = !dataLoading && accounts.length > 0
     return (
       <IntroAnimation
-        ready={ready}
         onComplete={() => {
           try {
             sessionStorage.setItem('vcf_intro_shown', '1')

@@ -1,56 +1,98 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 /**
- * Premium login → dashboard intro:
- *   1. White screen, /favicon.png blooms in with a soft halo
- *   2. Favicon dissolves into a stroke-drawn "VC" wordmark
- *   3. The V and C spiral outward, scaling down + rotating
- *   4. They reform as a clean gradient ring spinner
- *   5. Tagline fades in below
- *   6. Whole panel cross-fades out, revealing the app
+ * Premium login → dashboard intro (~3s, hard-capped):
+ *   1. Stroke-drawn "VC" wordmark appears
+ *   2. Letters spiral outward (rotate + shrink)
+ *   3. They reform as a clean gradient ring spinner
+ *   4. Tagline fades in below
+ *   5. Whole panel cross-fades out, revealing the app
  *
- * The intro will not finish until BOTH the minimum runtime has elapsed AND
- * the parent has signaled (via the `ready` prop) that data is loaded.
- * That way it doubles as a premium loading state.
+ * Plays a soft, synthesized D-major arpeggio chime (~1.8s) timed to the
+ * letter draw. No audio asset needed — generated with Web Audio API.
+ *
+ * The intro now runs on its OWN clock (not gated on data load) so it
+ * can never hang. After it dismisses, App falls back to <Loading /> if
+ * data is still pending.
  */
-export default function IntroAnimation({ onComplete, ready = true }) {
-  const [stage, setStage] = useState('logo') // logo | letters | spiral | loader | exit
-  const minDoneRef = useRef(false)
-  const completedRef = useRef(false)
 
-  // Stage timeline (ms from mount)
+function playIntroChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    // Some browsers start the context suspended until a user gesture.
+    // Login is a user gesture, so this should usually succeed silently.
+    ctx.resume?.().catch(() => {})
+
+    const now = ctx.currentTime + 0.05
+
+    // Master gain keeps overall volume gentle.
+    const master = ctx.createGain()
+    master.gain.value = 0.55
+    master.connect(ctx.destination)
+
+    // Soft low-pass filter so the sines sound warm, not piercing.
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.value = 4500
+    filter.Q.value = 0.7
+    filter.connect(master)
+
+    // D major arpeggio swelling into a chord: D5, F#5, A5, D6
+    const notes = [
+      { freq: 587.33, delay: 0.0, peak: 0.07 },
+      { freq: 739.99, delay: 0.12, peak: 0.06 },
+      { freq: 880.0, delay: 0.24, peak: 0.055 },
+      { freq: 1174.66, delay: 0.36, peak: 0.045 },
+    ]
+
+    notes.forEach(({ freq, delay, peak }) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, now + delay)
+      // very subtle vibrato
+      osc.detune.setValueAtTime(0, now + delay)
+
+      const start = now + delay
+      const peakT = start + 0.32
+      const end = start + 1.6
+
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(peak, peakT)
+      gain.gain.exponentialRampToValueAtTime(0.0001, end)
+
+      osc.connect(gain)
+      gain.connect(filter)
+      osc.start(start)
+      osc.stop(end + 0.05)
+    })
+
+    // Clean up after the sound has finished.
+    setTimeout(() => ctx.close().catch(() => {}), 2500)
+  } catch {
+    // Audio blocked or unsupported — fail silently, visual still plays.
+  }
+}
+
+export default function IntroAnimation({ onComplete }) {
+  // Stages: 'letters' → 'spiral' → 'loader' → 'exit'
+  const [stage, setStage] = useState('letters')
+
   useEffect(() => {
+    playIntroChime()
+
     const timers = [
-      setTimeout(() => setStage('letters'), 750),
-      setTimeout(() => setStage('spiral'), 1300),
-      setTimeout(() => setStage('loader'), 2050),
-      setTimeout(() => {
-        minDoneRef.current = true
-        if (ready && !completedRef.current) {
-          completedRef.current = true
-          setStage('exit')
-        }
-      }, 2900),
+      setTimeout(() => setStage('spiral'), 800),
+      setTimeout(() => setStage('loader'), 1500),
+      setTimeout(() => setStage('exit'), 2500),
+      setTimeout(() => onComplete?.(), 3050),
     ]
     return () => timers.forEach(clearTimeout)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // If `ready` flips after min runtime, transition to exit
-  useEffect(() => {
-    if (ready && minDoneRef.current && !completedRef.current) {
-      completedRef.current = true
-      setStage('exit')
-    }
-  }, [ready])
-
-  // Once exit fade completes, signal parent
-  useEffect(() => {
-    if (stage !== 'exit') return
-    const t = setTimeout(() => onComplete?.(), 650)
-    return () => clearTimeout(t)
-  }, [stage, onComplete])
 
   return (
     <AnimatePresence>
@@ -61,10 +103,10 @@ export default function IntroAnimation({ onComplete, ready = true }) {
             opacity: stage === 'exit' ? 0 : 1,
             scale: stage === 'exit' ? 1.04 : 1,
           }}
-          transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
           className="fixed inset-0 z-[200] flex flex-col items-center justify-center overflow-hidden bg-white"
         >
-          {/* Subtle radial gradient backdrop */}
+          {/* Subtle radial backdrop */}
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
@@ -74,19 +116,16 @@ export default function IntroAnimation({ onComplete, ready = true }) {
             }}
           />
 
-          {/* Stage container */}
           <div className="relative h-44 w-44 flex items-center justify-center">
-            {/* Pulsing halo behind the logo */}
+            {/* Pulsing halo */}
             <motion.div
               className="absolute rounded-full bg-vcf-500/10 blur-3xl"
-              initial={{ opacity: 0, scale: 0.4, width: 160, height: 160 }}
+              initial={{ opacity: 0, scale: 0.5, width: 160, height: 160 }}
               animate={{
                 opacity: stage === 'exit' ? 0 : 0.9,
                 scale:
-                  stage === 'logo'
+                  stage === 'letters'
                     ? 1
-                    : stage === 'letters'
-                    ? 1.15
                     : stage === 'spiral'
                     ? 1.6
                     : 1.2,
@@ -95,24 +134,7 @@ export default function IntroAnimation({ onComplete, ready = true }) {
               style={{ width: 160, height: 160 }}
             />
 
-            {/* === Phase 1: PNG favicon === */}
-            <AnimatePresence>
-              {stage === 'logo' && (
-                <motion.img
-                  key="favicon"
-                  src="/favicon.png"
-                  alt=""
-                  draggable={false}
-                  initial={{ opacity: 0, scale: 0.55, filter: 'blur(10px)' }}
-                  animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                  exit={{ opacity: 0, scale: 1.45, filter: 'blur(6px)' }}
-                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute h-24 w-24 object-contain"
-                />
-              )}
-            </AnimatePresence>
-
-            {/* === Phase 2/3: VC letters (drawn, then spiral) === */}
+            {/* === Phase 1/2: VC letters (drawn, then spiral) === */}
             <AnimatePresence>
               {(stage === 'letters' || stage === 'spiral') && (
                 <motion.svg
@@ -154,7 +176,7 @@ export default function IntroAnimation({ onComplete, ready = true }) {
                     </linearGradient>
                   </defs>
 
-                  {/* The letter "V": slants down to center, then up */}
+                  {/* "V" */}
                   <motion.path
                     d="M -65 -55 L -20 55 L 25 -55"
                     fill="none"
@@ -173,7 +195,7 @@ export default function IntroAnimation({ onComplete, ready = true }) {
                     }}
                   />
 
-                  {/* The letter "C": ¾ circle opening to the right */}
+                  {/* "C" — ¾ circle opening to the right */}
                   <motion.path
                     d="M 75 -45 A 50 50 0 1 0 75 45"
                     fill="none"
@@ -195,7 +217,7 @@ export default function IntroAnimation({ onComplete, ready = true }) {
               )}
             </AnimatePresence>
 
-            {/* === Phase 4: Loader spinner === */}
+            {/* === Phase 3: Loader spinner === */}
             <AnimatePresence>
               {(stage === 'loader' || stage === 'exit') && (
                 <motion.div
@@ -203,7 +225,7 @@ export default function IntroAnimation({ onComplete, ready = true }) {
                   initial={{ opacity: 0, scale: 0.55 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                   className="absolute h-20 w-20"
                 >
                   <svg viewBox="0 0 50 50" className="h-full w-full">
@@ -258,13 +280,12 @@ export default function IntroAnimation({ onComplete, ready = true }) {
           <motion.div
             initial={{ opacity: 0, y: 12, letterSpacing: '0.15em' }}
             animate={{
-              opacity:
-                stage === 'loader' || stage === 'exit' ? 1 : 0,
+              opacity: stage === 'loader' || stage === 'exit' ? 1 : 0,
               y: stage === 'loader' || stage === 'exit' ? 0 : 12,
               letterSpacing:
                 stage === 'loader' || stage === 'exit' ? '0.4em' : '0.15em',
             }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
             className="mt-10 text-[11px] font-semibold uppercase text-slate-500"
           >
             Varsity Capital · Fund Dashboard
