@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, Mail, Lock, Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { primeAudio } from '../lib/audio'
 
 export default function Login() {
   const [mode, setMode] = useState('login') // 'login' | 'create' | 'forgot'
@@ -17,9 +16,6 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.()
-    // Prime the AudioContext while we still have a fresh user gesture
-    // (the Supabase auth round-trip would otherwise consume it).
-    primeAudio()
     setBusy(true)
     setMsg(null)
 

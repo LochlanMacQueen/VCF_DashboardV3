@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { getAudioContext, primeAudio } from '../lib/audio'
 
 /**
  * Premium login → dashboard intro (~3s, hard-capped):
@@ -10,83 +9,16 @@ import { getAudioContext, primeAudio } from '../lib/audio'
  *   4. Tagline fades in below
  *   5. Whole panel cross-fades out, revealing the app
  *
- * Plays a soft, synthesized D-major arpeggio chime (~1.8s) timed to the
- * letter draw. No audio asset needed — generated with Web Audio API.
- *
- * The intro now runs on its OWN clock (not gated on data load) so it
- * can never hang. After it dismisses, App falls back to <Loading /> if
- * data is still pending.
+ * Runs on its OWN clock (not gated on data load) so it can never hang.
+ * After it dismisses, App falls back to <Loading /> if data is still
+ * pending.
  */
-
-function playIntroChime() {
-  try {
-    // Reuse the context primed by the login click (or first page gesture);
-    // fall back to creating one if for some reason it wasn't primed.
-    const ctx = getAudioContext() || primeAudio()
-    if (!ctx) return
-    // If still suspended (autoplay policy), bail rather than throwing.
-    if (ctx.state === 'suspended') {
-      ctx.resume?.().catch(() => {})
-      if (ctx.state === 'suspended') return
-    }
-
-    const now = ctx.currentTime + 0.05
-
-    // Master gain keeps overall volume gentle.
-    const master = ctx.createGain()
-    master.gain.value = 0.55
-    master.connect(ctx.destination)
-
-    // Soft low-pass filter so the sines sound warm, not piercing.
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'lowpass'
-    filter.frequency.value = 4500
-    filter.Q.value = 0.7
-    filter.connect(master)
-
-    // D major arpeggio swelling into a chord: D5, F#5, A5, D6
-    const notes = [
-      { freq: 587.33, delay: 0.0, peak: 0.07 },
-      { freq: 739.99, delay: 0.12, peak: 0.06 },
-      { freq: 880.0, delay: 0.24, peak: 0.055 },
-      { freq: 1174.66, delay: 0.36, peak: 0.045 },
-    ]
-
-    notes.forEach(({ freq, delay, peak }) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(freq, now + delay)
-      // very subtle vibrato
-      osc.detune.setValueAtTime(0, now + delay)
-
-      const start = now + delay
-      const peakT = start + 0.32
-      const end = start + 1.6
-
-      gain.gain.setValueAtTime(0.0001, start)
-      gain.gain.exponentialRampToValueAtTime(peak, peakT)
-      gain.gain.exponentialRampToValueAtTime(0.0001, end)
-
-      osc.connect(gain)
-      gain.connect(filter)
-      osc.start(start)
-      osc.stop(end + 0.05)
-    })
-
-    // Don't close the shared context — other intros may want to reuse it.
-  } catch {
-    // Audio blocked or unsupported — fail silently, visual still plays.
-  }
-}
 
 export default function IntroAnimation({ onComplete }) {
   // Stages: 'letters' → 'spiral' → 'loader' → 'exit'
   const [stage, setStage] = useState('letters')
 
   useEffect(() => {
-    playIntroChime()
-
     const timers = [
       setTimeout(() => setStage('spiral'), 800),
       setTimeout(() => setStage('loader'), 1500),
