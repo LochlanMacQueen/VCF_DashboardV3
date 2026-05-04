@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { getAudioContext, primeAudio } from '../lib/audio'
 
 /**
  * Premium login → dashboard intro (~3s, hard-capped):
@@ -19,12 +20,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 function playIntroChime() {
   try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    // Some browsers start the context suspended until a user gesture.
-    // Login is a user gesture, so this should usually succeed silently.
-    ctx.resume?.().catch(() => {})
+    // Reuse the context primed by the login click (or first page gesture);
+    // fall back to creating one if for some reason it wasn't primed.
+    const ctx = getAudioContext() || primeAudio()
+    if (!ctx) return
+    // If still suspended (autoplay policy), bail rather than throwing.
+    if (ctx.state === 'suspended') {
+      ctx.resume?.().catch(() => {})
+      if (ctx.state === 'suspended') return
+    }
 
     const now = ctx.currentTime + 0.05
 
@@ -70,8 +74,7 @@ function playIntroChime() {
       osc.stop(end + 0.05)
     })
 
-    // Clean up after the sound has finished.
-    setTimeout(() => ctx.close().catch(() => {}), 2500)
+    // Don't close the shared context — other intros may want to reuse it.
   } catch {
     // Audio blocked or unsupported — fail silently, visual still plays.
   }
