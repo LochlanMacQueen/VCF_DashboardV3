@@ -17,6 +17,7 @@ import Modal from '../components/Modal'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { fetchSinglePrice } from '../lib/prices'
 import { formatDate, isVotingEligible } from '../lib/format'
 
 const statusColors = {
@@ -39,7 +40,7 @@ const emptyForm = {
 
 export default function Pitches() {
   const { user } = useAuth()
-  const { pitches, votes, role, myAccount, nav, refresh } = useData()
+  const { pitches, votes, watchlist, role, myAccount, nav, refresh } = useData()
   const isAdmin = role === 'admin'
   const canVote = isVotingEligible(myAccount, nav)
 
@@ -76,12 +77,32 @@ export default function Pitches() {
       ticker: form.ticker.toUpperCase(),
       slideshow_url: form.slideshow_url || null,
     }
+
+    const wasAlreadyRejected = editing?.status === 'rejected'
+    const isNowRejected = data.status === 'rejected'
+
     if (editing?.id) {
       await supabase.from('pitches').update(data).eq('id', editing.id)
     } else {
       data.created_by = user.id
       await supabase.from('pitches').insert(data)
     }
+
+    if (isNowRejected && !wasAlreadyRejected) {
+      const ticker = data.ticker
+      const alreadyWatched = watchlist.some((w) => w.ticker === ticker)
+      if (!alreadyWatched) {
+        const live = await fetchSinglePrice(ticker)
+        await supabase.from('watchlist').insert({
+          ticker,
+          added_by_user_id: user.id,
+          added_by_name: myAccount?.name || user.email || 'Unknown',
+          added_price: live?.price ?? null,
+          notes: `Rejected pitch – pitched by ${data.pitched_by}`,
+        })
+      }
+    }
+
     setEditing(null)
     setSaving(false)
     await refresh()
