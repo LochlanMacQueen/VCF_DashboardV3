@@ -9,6 +9,7 @@ import {
   MessageCircle,
   BookOpen,
   UserRound,
+  Radar,
   CheckSquare,
   Database,
   LogOut,
@@ -35,6 +36,7 @@ function SidebarLinks({ role, onClick }) {
     },
     { to: '/pitches', icon: Lightbulb, label: 'Stock Pitches', show: isMember },
     { to: '/watchlist', icon: Bookmark, label: 'Watchlist', show: isMember },
+    { to: '/screener', icon: Radar, label: 'Stock Screener', show: isMember },
     { to: '/chat', icon: MessageCircle, label: 'Chat', show: isMember },
     {
       to: '/resources',
@@ -216,7 +218,7 @@ export default function Sidebar() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 360, damping: 32 }}
-              className="lg:hidden fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-vcf-700 to-vcf-900 text-white flex flex-col shadow-2xl"
+              className="lg:hidden fixed inset-y-0 left-0 z-50 w-[min(18rem,calc(100vw-2rem))] bg-gradient-to-b from-vcf-700 to-vcf-900 text-white flex flex-col shadow-2xl"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
                 <span className="text-sm font-semibold">Varsity Capital</span>

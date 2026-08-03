@@ -12,6 +12,7 @@ import Analytics from './pages/Analytics'
 import Meetings from './pages/Meetings'
 import Pitches from './pages/Pitches'
 import Watchlist from './pages/Watchlist'
+import Screener from './pages/Screener'
 import Chat from './pages/Chat'
 import Resources from './pages/Resources'
 import Account from './pages/Account'
@@ -94,6 +95,14 @@ function Authenticated() {
           element={
             <MemberOnly>
               <Watchlist />
+            </MemberOnly>
+          }
+        />
+        <Route
+          path="/screener"
+          element={
+            <MemberOnly>
+              <Screener />
             </MemberOnly>
           }
         />
