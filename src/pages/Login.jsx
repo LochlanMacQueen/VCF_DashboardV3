@@ -117,12 +117,12 @@ export default function Login() {
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <input
-              type="email"
+              type={mode === 'login' ? 'text' : 'email'}
               required
-              autoComplete="email"
+              autoComplete={mode === 'login' ? 'username' : 'email'}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={mode === 'login' ? 'Email or username' : 'you@example.com'}
               className="vcf-input pl-10"
             />
           </div>

@@ -1,10 +1,28 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Download, Trash2, Database } from 'lucide-react'
+import {
+  Plus,
+  Download,
+  Trash2,
+  Database,
+  CalendarDays,
+  Loader2,
+} from 'lucide-react'
 import Card from '../components/Card'
 import { useData } from '../context/DataContext'
 import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../lib/format'
+import { fetchSinglePrice } from '../lib/prices'
+
+const SP500_SYMBOL = '^GSPC'
+
+function getLocalDateInputValue() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 function downloadCSV(rows, filename) {
   const csv = rows
@@ -40,6 +58,7 @@ export default function DataTools() {
   })
   const [bMsg, setBMsg] = useState(null)
   const [bSaving, setBSaving] = useState(false)
+  const [bFetchingToday, setBFetchingToday] = useState(false)
 
   const sectors = [...new Set(holdings.map((h) => h.sector).filter(Boolean))]
 
@@ -169,6 +188,39 @@ export default function DataTools() {
     }
     setBSaving(false)
     await refresh()
+  }
+
+  const fillTodayBenchmark = async () => {
+    const date = getLocalDateInputValue()
+    setBMsg(null)
+    setBFetchingToday(true)
+    setBForm((current) => ({ ...current, date, nav: nav.toFixed(4) }))
+
+    try {
+      const quote = await fetchSinglePrice(SP500_SYMBOL)
+      if (!quote?.price) {
+        throw new Error('No S&P 500 quote was returned.')
+      }
+
+      setBForm((current) => ({
+        ...current,
+        date,
+        sp500: quote.price.toFixed(2),
+        nav: nav.toFixed(4),
+      }))
+      setBMsg({
+        text: "Today's date and current S&P 500 value are ready to save.",
+        type: 'success',
+      })
+    } catch (error) {
+      console.error('Failed to fetch the S&P 500 quote:', error)
+      setBMsg({
+        text: 'Could not fetch the S&P 500 right now. You can retry or enter it manually.',
+        type: 'error',
+      })
+    } finally {
+      setBFetchingToday(false)
+    }
   }
 
   return (
@@ -332,9 +384,24 @@ export default function DataTools() {
 
         {/* Benchmark */}
         <Card delay={0.1} className="p-5 lg:col-span-2">
-          <h2 className="text-base font-semibold text-slate-900 mb-4">
-            Add benchmark data point
-          </h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-slate-900">
+              Add benchmark data point
+            </h2>
+            <button
+              type="button"
+              onClick={fillTodayBenchmark}
+              disabled={bFetchingToday || bSaving}
+              className="vcf-btn-secondary"
+            >
+              {bFetchingToday ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <CalendarDays size={14} />
+              )}
+              {bFetchingToday ? 'Fetching S&P 500…' : 'Use today'}
+            </button>
+          </div>
           <FormMessage msg={bMsg} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             <div>
@@ -347,7 +414,7 @@ export default function DataTools() {
               />
             </div>
             <div>
-              <label className="vcf-label">S&P 500 close</label>
+              <label className="vcf-label">S&P 500 value</label>
               <input
                 type="number"
                 step="0.01"
@@ -369,7 +436,7 @@ export default function DataTools() {
           </div>
           <button
             onClick={addBenchmark}
-            disabled={bSaving}
+            disabled={bSaving || bFetchingToday}
             className="vcf-btn-primary"
           >
             <Plus size={14} />

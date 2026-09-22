@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+const GUEST_EMAIL = 'vcf.kid.guest.20260714@gmail.com'
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -29,8 +30,12 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password })
+  const signIn = (identifier, password) => {
+    const normalizedIdentifier = identifier.trim().toLowerCase()
+    const email = normalizedIdentifier === 'guest' ? GUEST_EMAIL : normalizedIdentifier
+
+    return supabase.auth.signInWithPassword({ email, password })
+  }
 
   const signUp = (email, password) => supabase.auth.signUp({ email, password })
 
